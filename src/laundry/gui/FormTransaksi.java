@@ -1,355 +1,484 @@
 package laundry.gui;
 
-import laundry.model.*;
+import laundry.controller.LaundryController;
+import laundry.model.CucianInvalidException;
+import laundry.model.Pelanggan;
+import laundry.model.Transaksi;
+
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.util.List;
 import java.util.Locale;
 
 /**
- * [KELAS UTAMA / CLASS GUI]
- * Mengelola antarmuka transaksi, JMenuBar, tabel read-only,
- * operasi CRUD tersinkronisasi file txt, dan penerapan relasi Pelanggan.
+ * [MVC - VIEW / HALAMAN 4]
+ * Halaman CRUD lengkap dan Pencarian untuk Entitas 2 (Transaksi Laundry).
+ * Menerapkan variasi komponen Swing lengkap: JComboBox, JRadioButton, JCheckBox, JSpinner,
+ * JTextField, JTable, JMenuBar, serta perhitungan estimasi biaya secara real-time.
  */
 public class FormTransaksi extends JFrame {
-    
-    // [ATRIBUT / VARIABEL GLOBAL]
-    private JTextField txtNama, txtKuantitas;
-    private JComboBox<String> cbTipe, cbPaket;
-    private JButton btnTambah, btnUbah, btnHapus, btnLogOut;
+
+    // [ATRIBUT KOMPONEN INPUT BERVARIASI]
+    private final LaundryController controller;
+    private JTextField txtIdTransaksi, txtCari;
+    private JComboBox<Pelanggan> cbPelanggan;
+    private JComboBox<String> cbTipe;
+    private JRadioButton rbReguler, rbExpress;
+    private ButtonGroup grupPaket;
+    private JSpinner spnKuantitas, spnDiskon;
+    private JCheckBox chkAntarJemput;
+    private JLabel lblEstimasiBiaya;
+
+    // Tombol & Tabel
+    private JButton btnTambah, btnUbah, btnHapus, btnBersihkan, btnKembali;
     private JTable tabelTransaksi;
     private DefaultTableModel modelTabel;
-    
-    // [KONSTANTA]
-    private static final String FILE_NAME = "data_laundry.txt";
 
-    /**
-     * [CONSTRUCTOR]
-     */
-    public FormTransaksi() {
+    // Menu Bar
+    private JMenuItem itemMenuUtama, itemPelanggan, itemLogOut, itemKeluar, itemTentang;
+
+    public FormTransaksi(LaundryController controller) {
+        this.controller = controller;
+        inisialisasiGUI();
+        pasangEvent();
+        muatComboPelanggan();
+        muatTabel(controller.getDaftarTransaksi());
+        perbaruiEstimasi();
+    }
+
+    private void inisialisasiGUI() {
         setTitle("Kelola Transaksi Laundry - CleanWashApp");
-        setSize(700, 580); 
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setSize(920, 620);
+        setMinimumSize(new Dimension(820, 540));
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
-        
-        // [LAYOUT MANAGER UTAMA]
-        setLayout(new BorderLayout());
+        setLayout(new BorderLayout(10, 10));
 
-        // =========================================================
-        // [FITUR MENU BAR / JMenuBar]
-        // =========================================================
+        // --- [JMenuBar KONSISTEN ANTARHALAMAN] ---
         JMenuBar menuBar = new JMenuBar();
-        
-        JMenu menuFile = new JMenu("File");
-        JMenuItem itemLogOut = new JMenuItem("Log Out");
-        JMenuItem itemKeluar = new JMenuItem("Keluar dari Aplikasi");
-        menuFile.add(itemLogOut);
-        menuFile.addSeparator(); 
-        menuFile.add(itemKeluar);
+        JMenu menuNavigasi = new JMenu("Menu");
+        itemMenuUtama = new JMenuItem("Menu Utama");
+        itemPelanggan = new JMenuItem("Kelola Data Pelanggan");
+        itemLogOut = new JMenuItem("Log Out");
+        itemKeluar = new JMenuItem("Keluar Aplikasi");
+
+        menuNavigasi.add(itemMenuUtama);
+        menuNavigasi.add(itemPelanggan);
+        menuNavigasi.addSeparator();
+        menuNavigasi.add(itemLogOut);
+        menuNavigasi.add(itemKeluar);
 
         JMenu menuBantuan = new JMenu("Bantuan");
-        JMenuItem itemTentang = new JMenuItem("Tentang CleanWashApp");
+        itemTentang = new JMenuItem("Tentang CleanWashApp");
         menuBantuan.add(itemTentang);
 
-        menuBar.add(menuFile);
+        menuBar.add(menuNavigasi);
         menuBar.add(menuBantuan);
         setJMenuBar(menuBar);
 
-        // =========================================================
-        // --- PANEL FORM INPUT (Posisi NORTH) - Absolute Layout ---
-        // =========================================================
-        JPanel panelForm = new JPanel();
-        panelForm.setLayout(null); // Menggunakan layout manual sesuai desain awal
-        panelForm.setPreferredSize(new Dimension(700, 230));
+        // --- PANEL UTARA (Form 2 Kolom GridBagLayout + Tombol) ---
 
-        JLabel lblNama = new JLabel("Nama Pelanggan:");
-        lblNama.setBounds(20, 20, 120, 25);
-        panelForm.add(lblNama);
+        JPanel panelUtara = new JPanel(new BorderLayout());
 
-        txtNama = new JTextField();
-        txtNama.setBounds(150, 20, 200, 25);
-        panelForm.add(txtNama);
+        JPanel panelForm = new JPanel(new GridBagLayout());
+        panelForm.setBorder(BorderFactory.createTitledBorder("Form Input Transaksi Laundry"));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 10, 5, 10);
+        gbc.anchor = GridBagConstraints.WEST;
 
-        JLabel lblTipe = new JLabel("Tipe Layanan:");
-        lblTipe.setBounds(20, 60, 120, 25);
-        panelForm.add(lblTipe);
+        // --- KOLOM KIRI FORM ---
+        // Baris 0: ID Transaksi
+        gbc.gridx = 0; gbc.gridy = 0;
+        panelForm.add(new JLabel("ID Transaksi:"), gbc);
+        gbc.gridx = 1;
+        txtIdTransaksi = new JTextField("(Otomatis)", 15);
+        txtIdTransaksi.setEditable(false);
+        panelForm.add(txtIdTransaksi, gbc);
 
-        String[] tipe = {"Kiloan", "Satuan"};
-        cbTipe = new JComboBox<>(tipe);
-        cbTipe.setBounds(150, 60, 150, 25);
-        panelForm.add(cbTipe);
+        // Baris 1: Pelanggan (JComboBox<Pelanggan> - Relasi Objek)
+        gbc.gridx = 0; gbc.gridy = 1;
+        panelForm.add(new JLabel("Pelanggan:"), gbc);
+        gbc.gridx = 1;
+        cbPelanggan = new JComboBox<>();
+        cbPelanggan.setPreferredSize(new Dimension(210, 25));
+        panelForm.add(cbPelanggan, gbc);
 
-        JLabel lblKuantitas = new JLabel("Berat (kg) / Jumlah:");
-        lblKuantitas.setBounds(20, 100, 120, 25);
-        panelForm.add(lblKuantitas);
+        // Baris 2: Tipe Layanan (JComboBox<String>)
+        gbc.gridx = 0; gbc.gridy = 2;
+        panelForm.add(new JLabel("Tipe Layanan:"), gbc);
+        gbc.gridx = 1;
+        cbTipe = new JComboBox<>(new String[]{"Kiloan", "Satuan"});
+        cbTipe.setPreferredSize(new Dimension(150, 25));
+        panelForm.add(cbTipe, gbc);
 
-        txtKuantitas = new JTextField();
-        txtKuantitas.setBounds(150, 100, 100, 25);
-        panelForm.add(txtKuantitas);
+        // Baris 3: Pilihan Paket (JRadioButton + ButtonGroup)
+        gbc.gridx = 0; gbc.gridy = 3;
+        panelForm.add(new JLabel("Pilihan Paket:"), gbc);
+        gbc.gridx = 1;
+        JPanel panelRadio = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        rbReguler = new JRadioButton("Reguler", true);
+        rbExpress = new JRadioButton("Express");
+        grupPaket = new ButtonGroup();
+        grupPaket.add(rbReguler);
+        grupPaket.add(rbExpress);
+        panelRadio.add(rbReguler);
+        panelRadio.add(rbExpress);
+        panelForm.add(panelRadio, gbc);
 
-        JLabel lblPaket = new JLabel("Pilihan Paket:");
-        lblPaket.setBounds(20, 140, 120, 25);
-        panelForm.add(lblPaket);
+        // --- KOLOM KANAN FORM ---
+        // Baris 0: Berat / Jumlah (JSpinner)
+        gbc.gridx = 2; gbc.gridy = 0;
+        panelForm.add(new JLabel("Berat (kg) / Jumlah:"), gbc);
+        gbc.gridx = 3;
+        spnKuantitas = new JSpinner(new SpinnerNumberModel(1.0, 0.5, 100.0, 0.5));
+        spnKuantitas.setPreferredSize(new Dimension(100, 25));
+        panelForm.add(spnKuantitas, gbc);
 
-        String[] paket = {"Reguler", "Express"};
-        cbPaket = new JComboBox<>(paket);
-        cbPaket.setBounds(150, 140, 150, 25);
-        panelForm.add(cbPaket);
+        // Baris 1: Diskon % (JSpinner - memicu Method Overloading hitungBiaya)
+        gbc.gridx = 2; gbc.gridy = 1;
+        panelForm.add(new JLabel("Diskon (%):"), gbc);
+        gbc.gridx = 3;
+        spnDiskon = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 100.0, 5.0));
+        spnDiskon.setPreferredSize(new Dimension(100, 25));
+        panelForm.add(spnDiskon, gbc);
 
+        // Baris 2: Layanan Tambahan (JCheckBox)
+        gbc.gridx = 2; gbc.gridy = 2;
+        panelForm.add(new JLabel("Layanan Tambahan:"), gbc);
+        gbc.gridx = 3;
+        chkAntarJemput = new JCheckBox("Antar-Jemput (+Rp 5.000)");
+        panelForm.add(chkAntarJemput, gbc);
+
+        // Baris 3: Estimasi Biaya Real-Time
+        gbc.gridx = 2; gbc.gridy = 3;
+        panelForm.add(new JLabel("Estimasi Biaya:"), gbc);
+        gbc.gridx = 3;
+        lblEstimasiBiaya = new JLabel("Rp 6.000");
+        lblEstimasiBiaya.setFont(new Font("SansSerif", Font.BOLD, 14));
+        lblEstimasiBiaya.setForeground(new Color(0, 102, 153));
+        panelForm.add(lblEstimasiBiaya, gbc);
+
+        // Spacer kanan agar layout tetap ringkas dan tidak melar saat di-resize
+        gbc.gridx = 4; gbc.gridy = 0; gbc.weightx = 1.0;
+        panelForm.add(Box.createHorizontalGlue(), gbc);
+
+        // Panel Tombol Aksi (FlowLayout)
+        JPanel panelTombol = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
         btnTambah = new JButton("Tambah");
-        btnTambah.setBounds(20, 180, 90, 30);
-        panelForm.add(btnTambah);
-
         btnUbah = new JButton("Ubah");
-        btnUbah.setBounds(120, 180, 90, 30);
-        panelForm.add(btnUbah);
-
         btnHapus = new JButton("Hapus");
-        btnHapus.setBounds(220, 180, 90, 30);
-        panelForm.add(btnHapus);
+        btnBersihkan = new JButton("Bersihkan");
+        btnKembali = new JButton("Menu Utama");
 
-        // Posisi tombol Log Out dikembalikan ke pojok kanan atas
-        btnLogOut = new JButton("Log Out");
-        btnLogOut.setBounds(570, 20, 90, 30);
-        panelForm.add(btnLogOut);
+        panelTombol.add(btnTambah);
+        panelTombol.add(btnUbah);
+        panelTombol.add(btnHapus);
+        panelTombol.add(btnBersihkan);
+        panelTombol.add(btnKembali);
 
-        add(panelForm, BorderLayout.NORTH);
+        panelUtara.add(panelForm, BorderLayout.CENTER);
+        panelUtara.add(panelTombol, BorderLayout.SOUTH);
+        add(panelUtara, BorderLayout.NORTH);
 
-        // =========================================================
-        // --- TABEL TRANSAKSI (Posisi CENTER) ---
-        // =========================================================
-        String[] kolom = {"Nama", "Tipe", "Berat/Jml", "Total Biaya", "Estimasi"};
-        
-        // [OVERRIDING LOGIKA TABEL] Mencegah sel diedit secara langsung (Read-Only)
+        // --- PANEL TENGAH (Pencarian + JTable Read-Only) ---
+
+        JPanel panelTengah = new JPanel(new BorderLayout(5, 5));
+        panelTengah.setBorder(BorderFactory.createEmptyBorder(0, 10, 10, 10));
+
+        JPanel panelCari = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 5));
+        panelCari.add(new JLabel("Cari Transaksi (ID/Nama/Tipe/Paket):"));
+        txtCari = new JTextField(24);
+        panelCari.add(txtCari);
+        panelTengah.add(panelCari, BorderLayout.NORTH);
+
+        String[] kolom = {
+            "ID", "Pelanggan", "Tipe", "Paket", "Berat/Jml",
+            "Antar-Jemput", "Diskon", "Total Biaya", "Estimasi"
+        };
         modelTabel = new DefaultTableModel(kolom, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return false; 
+                return false;
             }
         };
-        
+
         tabelTransaksi = new JTable(modelTabel);
-        JScrollPane scrollPane = new JScrollPane(tabelTransaksi);
-        add(scrollPane, BorderLayout.CENTER);
+        tabelTransaksi.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        panelTengah.add(new JScrollPane(tabelTransaksi), BorderLayout.CENTER);
 
-        // [PEMANGGILAN METHOD] Menarik data lama dari file txt
-        muatDataDariFile();
-
-        // =========================================================
-        // EVENT LISTENER & LOGIKA AKSI TOMBOL
-        // =========================================================
-
-        // [EVENT LISTENER] Seleksi Baris Tabel
-        tabelTransaksi.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting() && tabelTransaksi.getSelectedRow() >= 0) {
-                int baris = tabelTransaksi.getSelectedRow();
-                txtNama.setText(modelTabel.getValueAt(baris, 0).toString());
-                cbTipe.setSelectedItem(modelTabel.getValueAt(baris, 1).toString());
-                txtKuantitas.setText(modelTabel.getValueAt(baris, 2).toString());
-            }
-        });
-
-        // 1. [METHOD CRUD - CREATE] 
-        btnTambah.addActionListener(e -> {
-            try {
-                String nama = txtNama.getText();
-                double kuantitas = Double.parseDouble(txtKuantitas.getText());
-                String tipeLayanan = cbTipe.getSelectedItem().toString();
-                String tipePaket = cbPaket.getSelectedItem().toString();
-
-                if (kuantitas <= 0) {
-                    JOptionPane.showMessageDialog(this, "Kuantitas tidak boleh 0 atau negatif!");
-                    return;
-                }
-
-                // [PEMBUATAN OBJEK ENTITAS KEDUA]
-                Pelanggan pelangganBaru = new Pelanggan(nama);
-
-                // [POLIMORFISME & RELASI] Memasukkan Entitas Pelanggan ke Layanan
-                Layanan layanan;
-                if (tipeLayanan.equals("Kiloan")) {
-                    layanan = new LayananKiloan(pelangganBaru, kuantitas, tipePaket);
-                } else {
-                    layanan = new LayananSatuan(pelangganBaru, kuantitas, tipePaket); 
-                }
-
-                double total = layanan.hitungBiaya();
-                String estimasi = ((EstimasiWaktu) layanan).getEstimasiSelesai();
-
-                // Format angka menggunakan Locale Java modern
-                DecimalFormat formatter = new DecimalFormat("#,###", new DecimalFormatSymbols(Locale.forLanguageTag("id-ID")));
-                String totalFormatted = "Rp " + formatter.format(total);
-                Object tampilKuantitas = (kuantitas == (int) kuantitas) ? (int) kuantitas : kuantitas;
-
-                // [PEMBUKTIAN RELASI] Memanggil nama melalui getter Entitas Pelanggan
-                String namaTampil = layanan.getPelanggan().getNama();
-
-                modelTabel.addRow(new Object[]{namaTampil, tipeLayanan, tampilKuantitas, totalFormatted, estimasi});
-
-                // [FILE I/O STORAGE] Simpan permanen
-                String dataSimpan = namaTampil + "," + tipeLayanan + "," + tampilKuantitas + "," + totalFormatted + "," + estimasi;
-                FileStorage.simpanData(dataSimpan);
-
-                JOptionPane.showMessageDialog(this, "Data berhasil ditambahkan & disimpan permanen!");
-                txtNama.setText("");
-                txtKuantitas.setText("");
-            } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(this, "Format berat harus berupa angka!");
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Terjadi kesalahan: " + ex.getMessage());
-            }
-        });
-
-        // 2. [METHOD CRUD - UPDATE] 
-        btnUbah.addActionListener(e -> {
-            int baris = tabelTransaksi.getSelectedRow();
-            if (baris >= 0) {
-                try {
-                    String namaBaru = txtNama.getText();
-                    if (namaBaru.trim().isEmpty() || txtKuantitas.getText().trim().isEmpty()) {
-                        JOptionPane.showMessageDialog(this, "Nama dan Berat/Jumlah tidak boleh kosong!");
-                        return;
-                    }
-
-                    double kuantitasBaru = Double.parseDouble(txtKuantitas.getText());
-                    String tipeBaru = cbTipe.getSelectedItem().toString();
-                    String paketBaru = cbPaket.getSelectedItem().toString();
-
-                    if (kuantitasBaru <= 0) {
-                        JOptionPane.showMessageDialog(this, "Kuantitas tidak boleh 0 atau negatif!");
-                        return;
-                    }
-
-                    // [PEMBUATAN OBJEK ENTITAS KEDUA]
-                    Pelanggan pelangganUpdate = new Pelanggan(namaBaru);
-                    
-                    // [POLIMORFISME]
-                    Layanan layanan;
-                    if (tipeBaru.equals("Kiloan")) {
-                        layanan = new LayananKiloan(pelangganUpdate, kuantitasBaru, paketBaru);
-                    } else {
-                        layanan = new LayananSatuan(pelangganUpdate, kuantitasBaru, paketBaru);
-                    }
-
-                    double totalBaru = layanan.hitungBiaya();
-                    String estimasiBaru = ((EstimasiWaktu) layanan).getEstimasiSelesai();
-                    
-                    // Format angka menggunakan Locale Java modern
-                    DecimalFormat formatter = new DecimalFormat("#,###", new DecimalFormatSymbols(Locale.forLanguageTag("id-ID")));
-                    String totalFormattedBaru = "Rp " + formatter.format(totalBaru);
-                    Object tampilKuantitasBaru = (kuantitasBaru == (int) kuantitasBaru) ? (int) kuantitasBaru : kuantitasBaru;
-                    
-                    // [PEMBUKTIAN RELASI] Memanggil nama melalui getter Entitas Pelanggan
-                    String namaTampilUpdate = layanan.getPelanggan().getNama();
-
-                    modelTabel.setValueAt(namaTampilUpdate, baris, 0);
-                    modelTabel.setValueAt(tipeBaru, baris, 1);
-                    modelTabel.setValueAt(tampilKuantitasBaru, baris, 2);
-                    modelTabel.setValueAt(totalFormattedBaru, baris, 3);
-                    modelTabel.setValueAt(estimasiBaru, baris, 4);
-
-                    // [SINKRONISASI FILE I/O] Memperbarui file txt
-                    simpanSemuaDataKeFile();
-
-                    JOptionPane.showMessageDialog(this, "Data berhasil diubah & diperbarui!");
-                    tabelTransaksi.clearSelection();
-                    txtNama.setText("");
-                    txtKuantitas.setText("");
-                } catch (NumberFormatException ex) {
-                    JOptionPane.showMessageDialog(this, "Format berat harus berupa angka!");
-                }
-            } else {
-                JOptionPane.showMessageDialog(this, "Pilih baris di tabel dulu yang mau diubah!");
-            }
-        });
-
-        // 3. [METHOD CRUD - DELETE]
-        btnHapus.addActionListener(e -> {
-            int baris = tabelTransaksi.getSelectedRow();
-            if (baris >= 0) {
-                int konfirmasi = JOptionPane.showConfirmDialog(this, "Yakin ingin menghapus data ini?", "Konfirmasi Hapus", JOptionPane.YES_NO_OPTION);
-                if (konfirmasi == JOptionPane.YES_OPTION) {
-                    modelTabel.removeRow(baris);
-                    
-                    // [SINKRONISASI FILE I/O]
-                    simpanSemuaDataKeFile();
-                    
-                    JOptionPane.showMessageDialog(this, "Data berhasil dihapus dari sistem!");
-                    txtNama.setText("");
-                    txtKuantitas.setText("");
-                }
-            } else {
-                JOptionPane.showMessageDialog(this, "Pilih baris di tabel yang mau dihapus!");
-            }
-        });
-
-        // =========================================================
-        // [EVENT LISTENER NAVIGASI MENU]
-        // =========================================================
-        btnLogOut.addActionListener(e -> prosesLogOut());
-        itemLogOut.addActionListener(e -> prosesLogOut());
-        
-        itemKeluar.addActionListener(e -> {
-            int konfirmasi = JOptionPane.showConfirmDialog(this, "Yakin ingin menutup aplikasi?", "Konfirmasi Keluar", JOptionPane.YES_NO_OPTION);
-            if (konfirmasi == JOptionPane.YES_OPTION) {
-                System.exit(0); 
-            }
-        });
-
-        itemTentang.addActionListener(e -> {
-            JOptionPane.showMessageDialog(this, 
-                "CleanWashApp v1.0\nDikembangkan oleh:\n- Yuni\n- Grey\n- Rosi\n\nTugas Proyek PBO 100% Selesai!", 
-                "Tentang Aplikasi", JOptionPane.INFORMATION_MESSAGE);
-        });
+        add(panelTengah, BorderLayout.CENTER);
     }
 
     /**
-     * [METHOD BANTUAN]
+     * [EVENT HANDLING TERPISAH]
+     * Seluruh listener memanggil method khusus tanpa menumpuk logika di dalam lambda.
      */
-    private void prosesLogOut() {
-        int konfirmasi = JOptionPane.showConfirmDialog(this, "Apakah Anda yakin ingin Log Out?", "Konfirmasi Log Out", JOptionPane.YES_NO_OPTION);
-        if (konfirmasi == JOptionPane.YES_OPTION) {
-            dispose(); 
-            new HalamanLogin().setVisible(true); 
+    private void pasangEvent() {
+        // Pembaruan estimasi biaya real-time saat komponen berubah
+        cbTipe.addActionListener(e -> perbaruiEstimasi());
+        rbReguler.addActionListener(e -> perbaruiEstimasi());
+        rbExpress.addActionListener(e -> perbaruiEstimasi());
+        spnKuantitas.addChangeListener(e -> perbaruiEstimasi());
+        spnDiskon.addChangeListener(e -> perbaruiEstimasi());
+        chkAntarJemput.addActionListener(e -> perbaruiEstimasi());
+
+        // Tombol CRUD
+        btnTambah.addActionListener(e -> tambahTransaksi());
+        btnUbah.addActionListener(e -> ubahTransaksi());
+        btnHapus.addActionListener(e -> hapusTransaksi());
+        btnBersihkan.addActionListener(e -> bersihkanForm());
+        btnKembali.addActionListener(e -> bukaMenuUtama());
+
+        // Seleksi baris tabel
+        tabelTransaksi.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                isiFormDariTabel();
+            }
+        });
+
+        // Pencarian real-time
+        txtCari.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) { cariData(); }
+            @Override
+            public void removeUpdate(DocumentEvent e) { cariData(); }
+            @Override
+            public void changedUpdate(DocumentEvent e) { cariData(); }
+        });
+
+        // Navigasi MenuBar
+        itemMenuUtama.addActionListener(e -> bukaMenuUtama());
+        itemPelanggan.addActionListener(e -> bukaFormPelanggan());
+        itemLogOut.addActionListener(e -> prosesLogOut());
+        itemKeluar.addActionListener(e -> prosesKeluar());
+        itemTentang.addActionListener(e -> tampilkanTentang());
+    }
+
+    private void muatComboPelanggan() {
+        cbPelanggan.removeAllItems();
+        for (Pelanggan p : controller.getDaftarPelanggan()) {
+            cbPelanggan.addItem(p);
         }
     }
 
-    /**
-     * [METHOD FILE I/O - READ/LOAD]
-     */
-    private void muatDataDariFile() {
-        try (BufferedReader br = new BufferedReader(new FileReader(FILE_NAME))) {
-            String baris;
-            while ((baris = br.readLine()) != null) {
-                String[] data = baris.split(",");
-                if (data.length == 5) {
-                    modelTabel.addRow(new Object[]{data[0], data[1], data[2], data[3], data[4]});
-                }
-            }
-        } catch (IOException e) {}
+    private String getPaketTerpilih() {
+        return rbExpress.isSelected() ? "Express" : "Reguler";
     }
 
-    /**
-     * [METHOD FILE I/O - WRITE/SAVE ALL]
-     */
-    private void simpanSemuaDataKeFile() {
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(FILE_NAME, false))) { 
-            for (int i = 0; i < modelTabel.getRowCount(); i++) {
-                String nama = modelTabel.getValueAt(i, 0).toString();
-                String tipe = modelTabel.getValueAt(i, 1).toString();
-                String berat = modelTabel.getValueAt(i, 2).toString();
-                String total = modelTabel.getValueAt(i, 3).toString();
-                String estimasi = modelTabel.getValueAt(i, 4).toString();
-                bw.write(nama + "," + tipe + "," + berat + "," + total + "," + estimasi);
-                bw.newLine();
+    private String formatRupiah(double nominal) {
+        DecimalFormat formatter = new DecimalFormat("#,###", new DecimalFormatSymbols(Locale.forLanguageTag("id-ID")));
+        return "Rp " + formatter.format(nominal);
+    }
+
+    private void perbaruiEstimasi() {
+        try {
+            String tipe = cbTipe.getSelectedItem().toString();
+            double kuantitas = ((Number) spnKuantitas.getValue()).doubleValue();
+            double diskon = ((Number) spnDiskon.getValue()).doubleValue();
+            boolean antarJemput = chkAntarJemput.isSelected();
+
+            double estimasi = controller.hitungEstimasiBiaya(
+                tipe, kuantitas, getPaketTerpilih(), antarJemput, diskon
+            );
+            lblEstimasiBiaya.setText(formatRupiah(estimasi));
+        } catch (CucianInvalidException ex) {
+            lblEstimasiBiaya.setText("Rp 0");
+        }
+    }
+
+    // [METHOD CRUD - READ]
+    private void muatTabel(List<Transaksi> daftar) {
+        modelTabel.setRowCount(0);
+        for (Transaksi t : daftar) {
+            double qty = t.getLayanan().getKuantitas();
+            Object tampilQty = (qty == (int) qty) ? (int) qty : qty;
+
+            double disc = t.getDiskonPersen();
+            String tampilDisc = (disc == (int) disc) ? ((int) disc + "%") : (disc + "%");
+
+            modelTabel.addRow(new Object[]{
+                t.getIdTransaksi(),
+                t.getPelanggan().getNama(),
+                t.getLayanan().getTipeLayanan(),
+                t.getLayanan().getJenisPaket(),
+                tampilQty,
+                t.isAntarJemput() ? "Ya" : "Tidak",
+                tampilDisc,
+                formatRupiah(t.getTotalBiaya()),
+                t.getEstimasiSelesai()
+            });
+        }
+    }
+
+    private void isiFormDariTabel() {
+        int baris = tabelTransaksi.getSelectedRow();
+        if (baris >= 0) {
+            String idTrx = modelTabel.getValueAt(baris, 0).toString();
+            Transaksi trx = controller.cariTransaksiById(idTrx);
+            if (trx != null) {
+                txtIdTransaksi.setText(trx.getIdTransaksi());
+                pilihPelangganDiCombo(trx.getPelanggan().getIdPelanggan());
+                cbTipe.setSelectedItem(trx.getLayanan().getTipeLayanan());
+                if (trx.getLayanan().getJenisPaket().equals("Express")) {
+                    rbExpress.setSelected(true);
+                } else {
+                    rbReguler.setSelected(true);
+                }
+                spnKuantitas.setValue(trx.getLayanan().getKuantitas());
+                spnDiskon.setValue(trx.getDiskonPersen());
+                chkAntarJemput.setSelected(trx.isAntarJemput());
+                perbaruiEstimasi();
             }
-        } catch (IOException e) {}
+        }
+    }
+
+    private void pilihPelangganDiCombo(String idPelanggan) {
+        for (int i = 0; i < cbPelanggan.getItemCount(); i++) {
+            Pelanggan p = cbPelanggan.getItemAt(i);
+            if (p.getIdPelanggan().equals(idPelanggan)) {
+                cbPelanggan.setSelectedIndex(i);
+                return;
+            }
+        }
+    }
+
+    // [METHOD CRUD - CREATE]
+    private void tambahTransaksi() {
+        Pelanggan pelanggan = (Pelanggan) cbPelanggan.getSelectedItem();
+        if (pelanggan == null) {
+            JOptionPane.showMessageDialog(this,
+                "Belum ada data pelanggan! Tambahkan pelanggan dulu di menu Kelola Data Pelanggan.",
+                "Pelanggan Kosong", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            String tipe = cbTipe.getSelectedItem().toString();
+            double kuantitas = ((Number) spnKuantitas.getValue()).doubleValue();
+            double diskon = ((Number) spnDiskon.getValue()).doubleValue();
+            boolean antarJemput = chkAntarJemput.isSelected();
+
+            controller.tambahTransaksi(pelanggan, tipe, kuantitas, getPaketTerpilih(), antarJemput, diskon);
+            muatTabel(controller.getDaftarTransaksi());
+            bersihkanForm();
+            JOptionPane.showMessageDialog(this, "Transaksi berhasil ditambahkan & disimpan permanen!");
+        } catch (CucianInvalidException ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage(), "Input Tidak Valid", JOptionPane.WARNING_MESSAGE);
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Gagal menyimpan file: " + ex.getMessage(), "Error File", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    // [METHOD CRUD - UPDATE]
+    private void ubahTransaksi() {
+        int baris = tabelTransaksi.getSelectedRow();
+        if (baris < 0) {
+            JOptionPane.showMessageDialog(this, "Pilih baris transaksi pada tabel yang ingin diubah!");
+            return;
+        }
+        Pelanggan pelanggan = (Pelanggan) cbPelanggan.getSelectedItem();
+        if (pelanggan == null) {
+            JOptionPane.showMessageDialog(this, "Data pelanggan tidak tersedia!");
+            return;
+        }
+
+        try {
+            String id = txtIdTransaksi.getText();
+            String tipe = cbTipe.getSelectedItem().toString();
+            double kuantitas = ((Number) spnKuantitas.getValue()).doubleValue();
+            double diskon = ((Number) spnDiskon.getValue()).doubleValue();
+            boolean antarJemput = chkAntarJemput.isSelected();
+
+            controller.ubahTransaksi(id, pelanggan, tipe, kuantitas, getPaketTerpilih(), antarJemput, diskon);
+            muatTabel(controller.getDaftarTransaksi());
+            bersihkanForm();
+            JOptionPane.showMessageDialog(this, "Transaksi berhasil diperbarui!");
+        } catch (CucianInvalidException ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage(), "Input Tidak Valid", JOptionPane.WARNING_MESSAGE);
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Gagal memperbarui file: " + ex.getMessage(), "Error File", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    // [METHOD CRUD - DELETE dengan Konfirmasi]
+    private void hapusTransaksi() {
+        int baris = tabelTransaksi.getSelectedRow();
+        if (baris < 0) {
+            JOptionPane.showMessageDialog(this, "Pilih baris transaksi yang ingin dihapus!");
+            return;
+        }
+        String id = modelTabel.getValueAt(baris, 0).toString();
+        String nama = modelTabel.getValueAt(baris, 1).toString();
+        int konfirmasi = JOptionPane.showConfirmDialog(this,
+            "Yakin ingin menghapus transaksi " + id + " milik " + nama + "?",
+            "Konfirmasi Hapus", JOptionPane.YES_NO_OPTION);
+
+        if (konfirmasi == JOptionPane.YES_OPTION) {
+            try {
+                controller.hapusTransaksi(id);
+                muatTabel(controller.getDaftarTransaksi());
+                bersihkanForm();
+                JOptionPane.showMessageDialog(this, "Transaksi berhasil dihapus!");
+            } catch (CucianInvalidException | IOException ex) {
+                JOptionPane.showMessageDialog(this, ex.getMessage(), "Gagal Hapus", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private void cariData() {
+        muatTabel(controller.cariTransaksi(txtCari.getText()));
+    }
+
+    private void bersihkanForm() {
+        txtIdTransaksi.setText("(Otomatis)");
+        if (cbPelanggan.getItemCount() > 0) {
+            cbPelanggan.setSelectedIndex(0);
+        }
+        cbTipe.setSelectedIndex(0);
+        rbReguler.setSelected(true);
+        spnKuantitas.setValue(1.0);
+        spnDiskon.setValue(0.0);
+        chkAntarJemput.setSelected(false);
+        tabelTransaksi.clearSelection();
+        perbaruiEstimasi();
+    }
+
+    private void bukaMenuUtama() {
+        new MenuUtama(controller).setVisible(true);
+        dispose();
+    }
+
+    private void bukaFormPelanggan() {
+        new FormPelanggan(controller).setVisible(true);
+        dispose();
+    }
+
+    private void prosesLogOut() {
+        int konfirmasi = JOptionPane.showConfirmDialog(this,
+            "Apakah Anda yakin ingin Log Out?", "Konfirmasi Log Out", JOptionPane.YES_NO_OPTION);
+        if (konfirmasi == JOptionPane.YES_OPTION) {
+            new HalamanLogin().setVisible(true);
+            dispose();
+        }
+    }
+
+    private void prosesKeluar() {
+        int konfirmasi = JOptionPane.showConfirmDialog(this,
+            "Yakin ingin menutup aplikasi?", "Konfirmasi Keluar", JOptionPane.YES_NO_OPTION);
+        if (konfirmasi == JOptionPane.YES_OPTION) {
+            System.exit(0);
+        }
+    }
+
+    private void tampilkanTentang() {
+        JOptionPane.showMessageDialog(this,
+            "CleanWashApp v2.0 (Arsitektur MVC)\nDikembangkan oleh:\n- Yunita Dwi Ardilasari\n- Greycilfa\n- Rosita Salsabila",
+            "Tentang CleanWashApp", JOptionPane.INFORMATION_MESSAGE);
     }
 }

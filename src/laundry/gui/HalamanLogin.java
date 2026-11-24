@@ -1,98 +1,136 @@
 package laundry.gui;
 
-import java.awt.EventQueue;
-import java.awt.Font;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JTextField;
-import javax.swing.JPasswordField;
-import javax.swing.JButton;
-import javax.swing.JOptionPane;
-import javax.swing.SwingConstants;
+import laundry.controller.LaundryController;
+import javax.swing.*;
+import java.awt.*;
 
-// Kelas GUI untuk Halaman Login
+/**
+ * [MVC - VIEW / HALAMAN 1]
+ * Halaman autentikasi petugas sebelum masuk ke Menu Utama CleanWashApp.
+ * Menggunakan kombinasi BorderLayout, GridBagLayout, dan FlowLayout (tanpa Absolute Layout).
+ */
 public class HalamanLogin extends JFrame {
 
-    // Deklarasi variabel untuk kolom input
+    // [ATRIBUT KOMPONEN GUI & CONTROLLER]
+    private final LaundryController controller;
     private JTextField txtUsername;
     private JPasswordField txtPassword;
+    private JButton btnLogin, btnReset;
 
-    // Method main agar halaman login bisa dijalankan pertama kali saat program di-Run
-    public static void main(String[] args) {
-        EventQueue.invokeLater(() -> {
-            try {
-                HalamanLogin frame = new HalamanLogin();
-                frame.setVisible(true); // Menampilkan jendela login ke layar
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
+    // [CONSTRUCTOR]
+    public HalamanLogin() {
+        this.controller = new LaundryController();
+        inisialisasiGUI();
+        pasangEvent();
     }
 
-    // Konstruktor: Tempat mengatur bentuk jendela dan tata letak komponen di dalamnya
-    public HalamanLogin() {
-        // --- PENGATURAN JENDELA UTAMA (FRAME) ---
-        setTitle("Login Kasir - CleanWashApp"); // Judul di pojok kiri atas aplikasi
-        setBounds(100, 100, 400, 300); // Ukuran jendela (x, y, lebar, tinggi)
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Program benar-benar berhenti jika disilang (X)
-        getContentPane().setLayout(null); // Memakai layout bebas (Absolute Layout) agar gampang diatur posisinya
+    /**
+     * [PENYUSUNAN ANTARMUKA & LAYOUT MANAGER]
+     */
+    private void inisialisasiGUI() {
+        setTitle("Login - CleanWashApp");
+        setSize(420, 270);
+        setMinimumSize(new Dimension(380, 250));
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+        setLayout(new BorderLayout(10, 10));
 
-        // --- LABEL JUDUL HALAMAN ---
-        JLabel lblJudul = new JLabel("Login CleanWashApp");
-        lblJudul.setFont(new Font("Tahoma", Font.BOLD, 18)); // Mengubah jenis dan ukuran huruf
-        lblJudul.setHorizontalAlignment(SwingConstants.CENTER); // Mengetengahkan teks judul
-        lblJudul.setBounds(10, 30, 364, 30);
-        getContentPane().add(lblJudul);
+        // --- HEADER (NORTH) ---
+        JPanel panelHeader = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 15));
+        JLabel lblJudul = new JLabel("LOGIN CLEANWASHAPP");
+        lblJudul.setFont(new Font("SansSerif", Font.BOLD, 16));
+        panelHeader.add(lblJudul);
+        add(panelHeader, BorderLayout.NORTH);
 
-        // --- KOMPONEN INPUT USERNAME ---
-        JLabel lblUsername = new JLabel("Username:");
-        lblUsername.setBounds(50, 90, 80, 20);
-        getContentPane().add(lblUsername);
+        // --- FORM INPUT (CENTER dengan GridBagLayout agar tetap ringkas saat di-resize) ---
+        JPanel panelForm = new JPanel(new GridBagLayout());
+        panelForm.setBorder(BorderFactory.createEmptyBorder(5, 25, 5, 25));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(6, 6, 6, 6);
+        gbc.anchor = GridBagConstraints.WEST;
 
-        txtUsername = new JTextField(); // Kotak teks biasa untuk nama pengguna
-        txtUsername.setBounds(140, 90, 180, 20);
-        getContentPane().add(txtUsername);
+        // Baris 1: Username
+        gbc.gridx = 0; gbc.gridy = 0;
+        panelForm.add(new JLabel("Username:"), gbc);
 
-        // --- KOMPONEN INPUT PASSWORD ---
-        JLabel lblPassword = new JLabel("Password:");
-        lblPassword.setBounds(50, 130, 80, 20);
-        getContentPane().add(lblPassword);
+        gbc.gridx = 1; gbc.gridy = 0;
+        txtUsername = new JTextField(16);
+        panelForm.add(txtUsername, gbc);
 
-        // Menggunakan JPasswordField agar ketikan berubah menjadi titik-titik rahasia (enkripsi visual)
-        txtPassword = new JPasswordField();
-        txtPassword.setBounds(140, 130, 180, 20);
-        getContentPane().add(txtPassword);
+        // Baris 2: Password
+        gbc.gridx = 0; gbc.gridy = 1;
+        panelForm.add(new JLabel("Password:"), gbc);
 
-        // --- KOMPONEN TOMBOL LOGIN ---
-        JButton btnLogin = new JButton("Login");
-        btnLogin.setBounds(140, 180, 90, 30);
-        getContentPane().add(btnLogin);
+        gbc.gridx = 1; gbc.gridy = 1;
+        txtPassword = new JPasswordField(16);
+        panelForm.add(txtPassword, gbc);
 
-        // --- LOGIKA EVENT HANDLING (SAAT TOMBOL DIKLIK) ---
-        btnLogin.addActionListener(e -> {
-            // Mengambil teks dari kolom username
-            String username = txtUsername.getText(); 
-            // Mengambil teks rahasia dari kolom password (harus dikonversi ke String)
-            String password = new String(txtPassword.getPassword()); 
+        // Baris 3: Informasi akun default untuk demo
+        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2;
+        gbc.anchor = GridBagConstraints.CENTER;
+        JLabel lblInfo = new JLabel("Akun default: admin / 12345");
+        lblInfo.setFont(new Font("SansSerif", Font.ITALIC, 11));
+        lblInfo.setForeground(Color.GRAY);
+        panelForm.add(lblInfo, gbc);
 
-            // Mengecek apakah kasir memasukkan data yang benar
-            // Di sini kita pakai "admin" dan "12345" sebagai syarat masuk
-            if (username.equals("admin") && password.equals("12345")) {
-                
-                // Jika benar, munculkan pop-up pemberitahuan sukses
-                JOptionPane.showMessageDialog(this, "Login Berhasil!");
-                
-                // Memanggil dan membuka halaman Menu Utama
-                MenuUtama menu = new MenuUtama();
-                menu.setVisible(true);
-                
-                // Menutup (menghancurkan) jendela login ini agar tidak menumpuk di belakang Menu Utama
-                dispose(); 
-                
-            } else {
-                // Jika salah, munculkan pop-up error peringatan
-                JOptionPane.showMessageDialog(this, "Username atau Password salah!", "Error Login", JOptionPane.ERROR_MESSAGE);
-            }
-        });
+        add(panelForm, BorderLayout.CENTER);
+
+        // --- TOMBOL AKSI (SOUTH dengan FlowLayout) ---
+        JPanel panelTombol = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 12));
+        btnLogin = new JButton("Masuk");
+        btnReset = new JButton("Bersihkan");
+        panelTombol.add(btnLogin);
+        panelTombol.add(btnReset);
+        add(panelTombol, BorderLayout.SOUTH);
+    }
+
+    /**
+     * [EVENT HANDLING TERPISAH]
+     * Setiap listener hanya memanggil method aksi khusus.
+     */
+    private void pasangEvent() {
+        btnLogin.addActionListener(e -> prosesLogin());
+        txtPassword.addActionListener(e -> prosesLogin()); // Bisa tekan Enter langsung
+        btnReset.addActionListener(e -> bersihkanForm());
+    }
+
+    // [METHOD AKSI - AUTENTIKASI VIA CONTROLLER]
+    private void prosesLogin() {
+        String username = txtUsername.getText().trim();
+        String password = new String(txtPassword.getPassword());
+
+        if (username.isEmpty() || password.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Username dan Password tidak boleh kosong!",
+                "Peringatan", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (controller.validasiLogin(username, password)) {
+            JOptionPane.showMessageDialog(this,
+                "Login berhasil! Selamat datang di CleanWashApp.",
+                "Sukses", JOptionPane.INFORMATION_MESSAGE);
+            new MenuUtama(controller).setVisible(true);
+            dispose();
+        } else {
+            JOptionPane.showMessageDialog(this,
+                "Username atau Password salah!",
+                "Login Gagal", JOptionPane.ERROR_MESSAGE);
+            txtPassword.setText("");
+            txtPassword.requestFocus();
+        }
+    }
+
+    private void bersihkanForm() {
+        txtUsername.setText("");
+        txtPassword.setText("");
+        txtUsername.requestFocus();
+    }
+
+    /**
+     * [MAIN METHOD] Titik awal eksekusi aplikasi CleanWashApp.
+     */
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new HalamanLogin().setVisible(true));
     }
 }
